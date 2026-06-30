@@ -11,6 +11,13 @@ imlec.execute("""
         stok INTEGER
     )
 """)
+imlec.execute("""
+    CREATE TABLE IF NOT EXISTS kategoriler(
+        id INTEGER PRIMARY KEY,
+        ad TEXT UNIQUE
+    )
+""")
+
 
 def urun_ekle(imlec):
     
@@ -27,16 +34,28 @@ def urun_ekle(imlec):
         yeni_stok = sonuc[0] + stok
         imlec.execute("UPDATE urunler SET stok = ? WHERE ad = ?", (yeni_stok, ad))
     else:
-        kategori = input("Kategori giriniz: ")
-        imlec.execute("INSERT INTO urunler (ad, fiyat, stok, kategori) VALUES (?, ?, ?, ?)", (ad, fiyat, stok, kategori)) 
+        kategori_adi = input("Kategori giriniz: ")
+        imlec.execute("""
+            SELECT id
+            FROM kategoriler
+            WHERE ad = ?
+        """, (kategori_adi,))
+        kategori_sonuc = imlec.fetchone()
+        
+        if kategori_sonuc:
+            kategori_id = kategori_sonuc[0]
+            imlec.execute("INSERT INTO urunler (ad, fiyat, stok, kategori_id) VALUES (?, ?, ?, ?)",(ad, fiyat, stok, kategori_id))
+        else:
+            print(f"{kategori_adi} kategorisi bulunamadı! Önce kategoriler tablosuna eklenmeli.")
 
 def urun_listele(imlec):
     imlec.execute("""
-        SELECT *
+        SELECT urunler.ad, urunler.fiyat, urunler.stok, kategoriler.ad
         FROM urunler
+        JOIN kategoriler ON urunler.kategori_id = kategoriler.id
     """)
     for urun in imlec.fetchall():
-        print(f"{urun[1]} | Fiyat: {urun[2]} | Stok: {urun[3]} | Kategori: {urun[4]}")     
+        print(f"{urun[0]} | Fiyat: {urun[1]} | Stok: {urun[2]} | Kategori: {urun[3]}")     
 
 def stok_guncelle(imlec):
     ad = input("Hangi ürünü güncellemek istiyosunuz? (iptal için q tuşuna basınız): ")
@@ -98,49 +117,70 @@ def istatistik_goster(imlec):
 
 def kategori_raporu(imlec):
     imlec.execute("""
-        SELECT kategori, SUM(stok)
+        SELECT kategoriler.ad, SUM(urunler.stok)
         FROM urunler
-        GROUP BY kategori
+        JOIN kategoriler ON urunler.kategori_id = kategoriler.id
+        GROUP BY kategoriler.ad
+        ORDER BY SUM(urunler.stok) DESC
     """)
     print("=== KATEGORİ RAPORU ===")
     for satir in imlec.fetchall():
         print(f"{satir[0]}: {satir[1]} adet")
 
+def kategori_ekle(imlec):
+    ad = input("Yeni kategori adı girininiz (iptal için q tuşuna basınız): ")
+    if ad == "q":
+        return
+
+    imlec.execute("""
+        SELECT id
+        FROM kategoriler
+        WHERE ad = ?
+    """, (ad,))
+    sonuc = imlec.fetchone()    
+
+    if sonuc:
+        print(f"{ad} kategorisi zaten var!")
+    else:
+        imlec.execute("INSERT INTO kategoriler (ad) VALUES (?)", (ad,))
+        print(f"{ad} kategorisi eklendi")
+
 while True:
     print("=== ENVANTER SİSTEMİ ===")
-    print("1. Ürün ekle")
-    print("2. Ürünleri listele")
-    print("3. Stok güncelle")
-    print("4. Ürün sil")
-    print("5. İstatistikler")
-    print("6. Kategori Raporu")
-    print("7. Çıkış")
+    print("1. Kategori ekle")
+    print("2. Ürün ekle")
+    print("3. Ürünleri listele")
+    print("4. Stok güncelle")
+    print("5. Ürün sil")
+    print("6. İstatistikler")
+    print("7. Kategori Raporu")
+    print("8. Çıkış")
     secim = input("Seçiminiz: ")
     
     if secim == "1":
-        urun_ekle(imlec)
+        kategori_ekle(imlec)
         baglanti.commit()
     elif secim == "2":
-        urun_listele(imlec)
+        urun_ekle(imlec)
+        baglanti.commit()
     elif secim == "3":
+        urun_listele(imlec)
+    elif secim == "4":
         stok_guncelle(imlec)
         baglanti.commit()
-    elif secim == "4":
+    elif secim == "5":
         urun_sil(imlec)
         baglanti.commit()
-    elif secim == "5":
-        istatistik_goster(imlec)  
     elif secim == "6":
-        kategori_raporu(imlec)      
+        istatistik_goster(imlec)
     elif secim == "7":
+        kategori_raporu(imlec)      
+    elif secim == "8":
         break
     else:
         print("Geçersiz seçim!")
       
     
-
-
-
 baglanti.commit()
 baglanti.close()
 print("İşlem tamamlandı!")        
